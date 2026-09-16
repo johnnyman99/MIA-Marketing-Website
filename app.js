@@ -29,6 +29,9 @@ const storage = getStorage(app);
 
 let currentUser = null;
 let myProfile = null;
+let latestOrders = [];
+let latestInvoices = [];
+let activityTimer = null;
 
 const loginScreen = document.getElementById("login-screen");
 const setupScreen = document.getElementById("setup-screen");
@@ -159,6 +162,9 @@ onAuthStateChanged(auth, async (user) => {
   } else {
     currentUser = null;
     myProfile = null;
+    latestOrders = [];
+    latestInvoices = [];
+    if (activityTimer) { clearInterval(activityTimer); activityTimer = null; }
     const cameFromLink = await handleInviteLink();
     if (cameFromLink) return;
     loginScreen.classList.remove("hidden");
@@ -182,6 +188,7 @@ function startApp() {
   loginScreen.classList.add("hidden");
   setupScreen.classList.add("hidden");
   appScreen.classList.remove("hidden");
+  showTab("home");
   watchMyProfile();
   listenCold();
   listenProgress();
@@ -189,6 +196,8 @@ function startApp() {
   listenOrders();
   listenInvoices();
   listenNotifications();
+  if (activityTimer) clearInterval(activityTimer);
+  activityTimer = setInterval(renderActivityFeed, 60000);
 }
 
 // ---- 6. Profile & roles ----
@@ -198,6 +207,8 @@ function watchMyProfile() {
   stopMyProfile = onSnapshot(doc(db, "users", currentUser.uid), (snap) => {
     myProfile = snap.data() || null;
     document.getElementById("welcome-text").textContent = `Welcome ${myProfile?.name || "there"}!`;
+    document.getElementById("home-user-name").textContent = myProfile?.name || "there";
+    renderActivityFeed();
 
     const isAdmin = myProfile?.role === "admin";
     document.getElementById("admin-tab-btn").classList.toggle("hidden", !isAdmin);
@@ -361,6 +372,63 @@ function timeAgo(ts) {
   if (diff < 3600) return Math.floor(diff / 60) + "m ago";
   if (diff < 86400) return Math.floor(diff / 3600) + "h ago";
   return ts.toDate().toLocaleDateString(undefined, { day: "numeric", month: "short" });
+}
+
+function currentActorName() {
+  return myProfile?.name || currentUser?.email?.split("@")[0] || "A teammate";
+}
+
+function activityMillis(item) {
+  if (!item.createdAt) return 0;
+  if (typeof item.createdAt.toMillis === "function") return item.createdAt.toMillis();
+  if (typeof item.createdAt.toDate === "function") return item.createdAt.toDate().getTime();
+  return 0;
+}
+
+function renderActivityFeed() {
+  const list = document.getElementById("activity-list");
+  if (!list) return;
+
+  const activity = [
+    ...latestOrders.map((order) => ({ ...order, activityType: "order" })),
+    ...latestInvoices.map((invoice) => ({ ...invoice, activityType: "invoice" }))
+  ].sort((a, b) => activityMillis(b) - activityMillis(a)).slice(0, 12);
+
+  list.innerHTML = "";
+  if (activity.length === 0) {
+    list.innerHTML = '<p class="activity-empty">No activity yet. New orders and invoice requests will appear here.</p>';
+    return;
+  }
+
+  activity.forEach((item) => {
+    const isOrder = item.activityType === "order";
+    const actor = item.createdByName || "A teammate";
+    const company = item.company || (isOrder ? "a customer" : "a company");
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = "activity-item";
+    row.innerHTML = `
+      <span class="activity-icon ${isOrder ? "order" : "invoice"}">${isOrder ? "📦" : "🧾"}</span>
+      <span class="activity-copy">
+        <p><strong class="activity-actor"></strong> <span class="activity-action"></span> <strong class="activity-company"></strong></p>
+        <span class="activity-detail"></span>
+      </span>
+      <span class="activity-time"></span>
+    `;
+    row.querySelector(".activity-actor").textContent = actor;
+    row.querySelector(".activity-action").textContent = isOrder ? "added an order for" : "requested an invoice for";
+    row.querySelector(".activity-company").textContent = company;
+    row.querySelector(".activity-detail").textContent = itemsSummary(item.items || []);
+    row.querySelector(".activity-time").textContent = timeAgo(item.createdAt);
+    row.addEventListener("click", () => {
+      if (isOrder) {
+        showTab(item.orderSource === "customer" ? "orders-customer" : "orders-store");
+      } else {
+        showTab(item.invoiceStatus === "done" ? "inv-done" : "inv-pending");
+      }
+    });
+    list.appendChild(row);
+  });
 }
 
 function listenNotifications() {
@@ -551,6 +619,8 @@ customerForm.querySelector(".btn-save-customer-order").addEventListener("click",
     orderStatus: "requested",
     tracking: "",
     archived: false,
+    createdBy: currentUser.uid,
+    createdByName: currentActorName(),
     createdAt: serverTimestamp()
   });
 
@@ -940,6 +1010,7 @@ function listenStores() {
           address: s.address || "", phone: s.phone || "",
           items: items, dealType: s.dealType || "buy",
           orderStatus: "requested", tracking: "", archived: false,
+          createdBy: currentUser.uid, createdByName: currentActorName(),
           createdAt: serverTimestamp()
         });
         orderForm.classList.add("hidden");
@@ -979,7 +1050,8 @@ function listenStores() {
           address: billingAddress, phone: phone, items: items,
           dealType: s.dealType || "buy", invoiceStatus: "pending",
           invoiceNumber: "", invoiceFileUrl: "", invoiceFileName: "",
-          archived: false, createdAt: serverTimestamp()
+          archived: false, createdBy: currentUser.uid,
+          createdByName: currentActorName(), createdAt: serverTimestamp()
         });
         invoiceForm.classList.add("hidden");
         invoicePicker.reset();
@@ -1108,6 +1180,8 @@ function listenOrders() {
   const q = query(collection(db, "orders"), orderBy("createdAt", "desc"));
 
   stopOrders = onSnapshot(q, (snapshot) => {
+    latestOrders = snapshot.docs.map((orderDoc) => ({ id: orderDoc.id, ...orderDoc.data() }));
+    renderActivityFeed();
     storeDiv.innerHTML = ""; custDiv.innerHTML = ""; histDiv.innerHTML = "";
     let storeCount = 0, custCount = 0, histCount = 0, lastDate = null;
 
@@ -1277,6 +1351,8 @@ function listenInvoices() {
   const q = query(collection(db, "invoiceRequests"), orderBy("createdAt", "desc"));
 
   stopInvoices = onSnapshot(q, (snapshot) => {
+    latestInvoices = snapshot.docs.map((invDoc) => ({ id: invDoc.id, ...invDoc.data() }));
+    renderActivityFeed();
     pendingDiv.innerHTML = ""; doneDiv.innerHTML = ""; histDiv.innerHTML = "";
     let pendingCount = 0, doneCount = 0, histCount = 0, lastDate = null;
 

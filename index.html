@@ -67,6 +67,37 @@
 
     main { padding: 24px; max-width: 1000px; margin: 0 auto; }
 
+    .home-hero { padding: 34px 2px 24px; }
+    .home-eyebrow { color: #6b4fd8; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 8px; }
+    .home-hero h2 { font-size: clamp(32px, 5vw, 50px); line-height: 1.08; letter-spacing: -0.035em; margin-bottom: 10px; }
+    .home-subtitle { color: #727283; font-size: 15px; }
+    .activity-card { padding: 0; overflow: hidden; }
+    .activity-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 19px 20px; border-bottom: 1px solid #f0f0f0; }
+    .activity-head h3 { font-size: 16px; }
+    .live-label { display: inline-flex; align-items: center; gap: 6px; color: #777; font-size: 12px; }
+    .live-dot { width: 7px; height: 7px; border-radius: 50%; background: #27ae60; box-shadow: 0 0 0 3px #eafaf1; }
+    .activity-item { width: 100%; display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; align-items: center; gap: 13px; padding: 15px 20px; border: 0; border-bottom: 1px solid #f3f3f3; background: white; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+    .activity-item:last-child { border-bottom: 0; }
+    .activity-item:hover { background: #faf9fe; }
+    .activity-icon { width: 42px; height: 42px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+    .activity-icon.order { background: #fff4e5; }
+    .activity-icon.invoice { background: #e8f6f3; }
+    .activity-copy { min-width: 0; }
+    .activity-copy p { font-size: 14px; line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .activity-copy strong { font-weight: 700; }
+    .activity-detail { display: block; color: #8a8a98; font-size: 12px; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .activity-time { color: #999; font-size: 12px; white-space: nowrap; }
+    .activity-empty { padding: 34px 20px; text-align: center; color: #999; font-size: 14px; }
+
+    @media (max-width: 640px) {
+      #app-screen header, nav, main { padding-left: 16px; padding-right: 16px; }
+      nav { flex-wrap: nowrap; overflow-x: auto; }
+      .tab-btn { padding-left: 12px; padding-right: 12px; }
+      .home-hero { padding-top: 24px; }
+      .activity-item { grid-template-columns: 40px minmax(0, 1fr); padding: 14px 16px; }
+      .activity-time { grid-column: 2; margin-top: -8px; }
+    }
+
     .card { background: white; border-radius: 12px; padding: 20px; margin-bottom: 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
     .card h2 { font-size: 16px; margin-bottom: 14px; }
     .add-form { display: flex; gap: 10px; flex-wrap: wrap; }
@@ -247,7 +278,8 @@
     </header>
 
     <nav>
-      <button class="tab-btn active" data-tab="cold">❄️ Cold leads <span class="count" id="count-cold">0</span></button>
+      <button class="tab-btn active" data-tab="home">Home</button>
+      <button class="tab-btn" data-tab="cold">❄️ Cold leads <span class="count" id="count-cold">0</span></button>
       <button class="tab-btn" data-tab="progress">📈 Progress leads <span class="count" id="count-progress">0</span></button>
       <button class="tab-btn" data-tab="stores">🏪 Stores <span class="count" id="count-stores">0</span></button>
 
@@ -279,7 +311,23 @@
     </nav>
 
     <main>
-      <section id="tab-cold">
+      <section id="tab-home">
+        <div class="home-hero">
+          <p class="home-eyebrow">MIA Sales</p>
+          <h2>Welcome, <span id="home-user-name">there</span></h2>
+          <p class="home-subtitle">Here’s what your team has been working on.</p>
+        </div>
+
+        <div class="card activity-card">
+          <div class="activity-head">
+            <h3>Recent activity</h3>
+            <span class="live-label"><span class="live-dot"></span>Live</span>
+          </div>
+          <div id="activity-list"><p class="activity-empty">Loading activity…</p></div>
+        </div>
+      </section>
+
+      <section id="tab-cold" class="hidden">
         <div class="card">
           <h2>Add a cold lead</h2>
           <div class="add-form">
